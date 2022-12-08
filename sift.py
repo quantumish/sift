@@ -7,7 +7,9 @@ import random
 import pickle
 from skimage.transform import probabilistic_hough_line
 from skimage import feature, data
+import sys
 
+# magic numbers
 sigma_min = 0.8
 sigma_in = 0.5
 delta_min = 0.5
@@ -59,6 +61,7 @@ def diff_gaussians(scale_space):
 
 
 def find_extrema(gaussians):
+    """Partially edited by ChatGPT!"""
     extremas = [[[] for _ in range(len(gaussians[0])-2)] for _ in range(len(gaussians))]
     for i in range(len(gaussians)):
         for j in range(1, len(gaussians[i])-1):
@@ -83,7 +86,6 @@ def find_extrema(gaussians):
     return extremas
 
 def get_grad(img, x, y):
-    # print(img[x][y])
     return np.array([
         img[x+1][y] - img[x][y],
         img[x][y+1] - img[x][y],
@@ -145,7 +147,6 @@ def run_siftmm(f):
     width, height = img.shape[:2]
     img = cv2.resize(img, (height//8, width//8))
     space = scale_space(img)
-    # preview_octaves(scale_space)
 
     dog = diff_gaussians(space)
 
@@ -164,7 +165,7 @@ def run_siftmm(f):
 
 
     info = []
-    for i in range(3):
+    for i in range(scales):
         important_pts = extremas[0][i]
         for pt in important_pts:
             try:
@@ -172,10 +173,8 @@ def run_siftmm(f):
                 dcptor = descriptor(space[0][i+1], pt)
                 info.append((pt, orientation, dcptor))
             except IndexError:
-                pass        
+                pass
         
-    # important_pts = extremas[0][0] + extremas[0][1] + extremas[0][2]
-    # orientations = [reference_orientation(img, pt) for pt in important_pts]
     return info
 
 
@@ -186,18 +185,7 @@ def prep(f):
     return img
 
 def lineseg_dists(p, a, b):
-    # print(p.shape)
-    # print(a.shape, b.shape)
-    # """Cartesian distance from point to line segment
-
-    # Edited to support arguments as series, from:
-    # https://stackoverflow.com/a/54442561/11208892
-
-    # Args:
-    #     - p: np.array of single point, shape (2,) or 2D array, shape (x, 2)
-    #     - a: np.array of shape (x, 2)
-    #     - b: np.array of shape (x, 2)
-    # """
+    """From https://stackoverflow.com/a/58781995"""
     # normalized tangent vectors
     d_ba = b - a
     d = np.divide(d_ba, (np.hypot(d_ba[:, 0], d_ba[:, 1])
@@ -218,7 +206,7 @@ def lineseg_dists(p, a, b):
 
     return np.hypot(h, c)
 
-cache = True
+cache = (sys.argv[1] == "--fromcache")
 if cache:
     res1, res2 = pickle.load(open("./keypts.pkl", "rb"))
 else:
@@ -228,7 +216,7 @@ else:
     pickle.dump((res1, res2), f)
     f.close()
 
-def remove_lines(res, img_name, thres=20):
+def remove_lines(res, img_name, thres=80):
     
     img = prep(img_name)
     width, height = img.shape[:2]
@@ -241,7 +229,7 @@ def remove_lines(res, img_name, thres=20):
     # show_img(np.uint8(mask))
 
     edge_image = feature.canny(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), sigma=1, low_threshold=100, high_threshold=120)
-    lines = probabilistic_hough_line(edge_image, threshold=1, line_length=40)
+    lines = probabilistic_hough_line(edge_image, threshold=1, line_length=50)
     # print(lines)
     # linesP = cv2.HoughLinesP(np.uint8(mask), 1, np.pi / 180, 50, None, 50, 10)
     # for i in lines:
@@ -263,35 +251,20 @@ def remove_lines(res, img_name, thres=20):
     #     print(min(lineseg_dists(np.array(x[0]), starts, ends)))
     return list(filter(lambda x: min(lineseg_dists(np.array(x[0]), starts, ends)) > thres, res))
 
-print("BEFORE", len(res1), len(res2))
 res1 = remove_lines(res1, "./desk1.jpg")
 res2 = remove_lines(res2, "./desk2.jpg")
-print("AFTER", len(res1), len(res2))
-# img = prep("./desk2.jpg")
-# edge_image = feature.canny(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), sigma=1, low_threshold=100, high_threshold=120)
-# lines = probabilistic_hough_line(edge_image, threshold=1, line_length=20)
-# starts = np.array([np.array(line[0]) for line in lines])
-# ends = np.array([np.array(line[1]) for line in lines])
-# res2 = list(filter(lambda x: min(lineseg_dists(np.array(x[0]), starts, ends)) < 10, res1))
-
-# res = list(filter(lambda x: min(lineseg_dists(np.array(x[0]), starts, ends)) < 10, res1))
-# for pt, v, d in res1:
-#     print(min(lineseg_dists(np.array(pt), starts, ends)))
-    
-# print(res1, res2)
 
 matches = []
 for pt, v, d in res1:
     for pt2, v2, d2 in res2:
         v_distance = np.linalg.norm(v-v2)
         d_distance = np.linalg.norm(d-d2)
-        if v_distance < 0.1 and d_distance < 0.1:
+        if d_distance < 0.3:
             matches.append((pt, pt2))
 print(f"{len(matches)} MATCHES FOUND")
 img1 = prep("./desk1.jpg")
 img2 = prep("./desk2.jpg")
 for pt, pt2 in matches:
-    # print(pt, pt2)
     dot_sz = 4
     color = (random.random()*255, random.random()*255, random.random()*255)
     for i in range(-dot_sz, dot_sz+1):
@@ -303,9 +276,4 @@ f, axarr = plt.subplots(2)
 axarr[0].imshow(img1)
 axarr[1].imshow(img2)
 plt.show()
-
-
-# show_extrema(dog, 0, 1, extremas[0][0])
-# show_extrema(dog, 0, 2, extremas[0][1])
-# show_extrema(dog, 0, 3, extremas[0][2])
 

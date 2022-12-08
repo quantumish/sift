@@ -17,18 +17,18 @@ to skip the extrema-finding step (which is the bottleneck)
 
 ## writeup
 
-TL;DR
-- Started by implementing the scale space / difference functions while guessing constants
-- Extrema finding function couldn't find any extrema! 
-  - Tried preprocessing with contrast filter
-  - Turns out the scale space blurring parameters are very important!
-- Realized that the chance of me finishing on time was low, so I started approximating steps of SIFT.
-- Instead of a gradient histogram, just averaged out the gradients near a keypoint to get reference orientation
-- Instead of a proper descriptor, just take the averaging gradients in regions nearby a point
-- Instead of principal curvature, use a Hough transform anr remove points that are too close to lines
-- Still doesn't work very well! Next steps:
-  - Proper matching across image scales
-  - Adjusting the descriptor's direction to be in terms of the reference orientation
+> **TL;DR**
+> - Started by implementing the scale space / difference functions while guessing constants
+> - Extrema finding function couldn't find any extrema! 
+>   - Tried preprocessing with contrast filter
+>   - Turns out the scale space blurring parameters are very important!
+> - Realized that the chance of me finishing on time was low, so I started approximating steps of SIFT.
+> - Instead of a gradient histogram, just averaged out the gradients near a keypoint to get reference orientation
+> - Instead of a proper descriptor, just take the averaging gradients in regions nearby a point
+> - Instead of principal curvature, use a Hough transform anr remove points that are too close to lines
+> - Still doesn't work very well! Next steps:
+>   - Proper matching across image scales
+>   - Adjusting the descriptor's direction to be in terms of the reference orientation
 	
 
 Parts of this will be a terser summary of my conceptual writeup for the object detection assignment. Sorry!
@@ -57,7 +57,7 @@ Simply picking a reasonably low threshold results in a *lot* of matches, the maj
 
 ![img](https://i.imgur.com/aWEaqFI.png)
 
-Part of this is because we skipped an important step: SIFT usually filters out keypoints that lie along lines/edges because they're invariant to translation - they're also especially bad for our more gradient-centric method since the gradient direction for edges are going to be similar to other edges in most cases. SIFT removes these points via *principal curvatures*, aka confusing math I don't get, but I figured I could get similar results by using the Hough transform on to find lines. 
+Part of this is because we skipped an important step: SIFT usually filters out keypoints that lie along lines/edges because they're invariant to translation along the direction of the line (and also not very rotation-invariant). They're also especially bad for our more gradient-centric method since the gradient direction for edges are going to be similar to other edges in most cases. SIFT removes these points via *principal curvatures*, aka confusing math I don't get, but I figured I could get similar results by using the Hough transform on to find lines. 
 
 So, I ran the image through a Canny edge detector (so that the Hough results would be less noisy), then ran a Hough transform to get the lines in the image. From there, I found the minimum distance to a line segment for all the keypoints, and filtered out any that were too close. One downside of this method is that without a bunch of parameter tuning, this step can be overeager (removing actually good keypoints because it thinks there's a line nearby).
 
